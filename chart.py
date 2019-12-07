@@ -10,44 +10,89 @@ import astropy.units as u
 
 class Chart:
     '''
-    Create a json chart of OTF observation for an object of one beam.
-    A Chart contains following attributes.
-        index : [(fits_name, seq_num), ...]
-        freq  : [(freq_of_1st_chan, chan_bw, nchan), ...]
-        time  : [obs_time_isot, ...]
-        coord : [(ra, dec), ...]
+    Object indexing FAST HI data for calibration and reduction.
+
+    Each attribute contains a numpy.array, each item of which records 
+    a specified meta-data for one spectrum with spectrum stack in time
+    series. 
+
+    A Chart contains following meta-data for an observation.
+        obj : name of the object
+        index : FITS file name and the sequence number in the FITS
+        freq1ch : central frequency of the 1st channel of each spectrum
+        chanbw : width of 1 channel
+        nchan : number of channels
+        time  : time stamp of each spectrum
+        coord : sky coordinate of each spectrum
 
     Parameters
     ----------
     obj : str
-        Name of the object.
+        Name of the object
 
-    index : list
-        spectral locator in a format of [[fits_name, seqnum], ...]
+    beam : int
+        Beam number. 1~19 for certain beam of the 19 beam receiver,
+        0 for a beam-fusion chart.
 
-    freq_setup : list
-        frequency setup in a format of [[freq1ch, chan_bw, nchan], ...]
+    filename : list
+        File name of the FITS which the spectrum is stored.
 
-    coord : list
-        
+    index : numpy.ndarray
+        The Index number of the spectrum in its FITS. 
 
-    beam_num : int
-        The beam number (start from 1).
+    freq1ch : astropy.units.Quantity (in frequency unit)
+        Central frequency of the 1st channel of each spectrum
 
-    fits_path : str
-        Path of all fits file for the observation.
+    chanbw : astropy.units.Quantity (in frequency unit)
+        Width of 1 channel
 
-    ky_path : str
-        Path of KY file.
+    nchan : numpy.ndarray
+        Number of channels
+    
+    time : astropy.time.Time
+        Time stamp of each spectrum
+
+    coord : astropy.coordinates.SkyCoord
+        Sky coordinates for each spectra
     '''
-    def __init__(self, obj, index, freq1ch, chanbw, nchan, time, coord):
+
+    def __init__(self, obj, beam, filename, index, freq1ch, chanbw, nchan, time, coord=None):
+        self._obj = obj
+        self._beam = beam
+        self._filename = filename
         self._index = index
         self._freq1ch = freq1ch
         self._chanbw = chanbw
         self._nchan = nchan 
         self._time = time 
         self._coord = coord 
-        self._obj = obj
+
+    @property
+    def obj(self):
+        '''Get the name of object'''
+        return self._obj
+    @obj.setter
+    def obj(self, value):
+        '''Set coord sequence'''
+        self._obj = value
+
+    @property
+    def beam(self):
+        '''Get the beam number'''
+        return self._beam
+    @beam.setter
+    def beam(self, value):
+        '''Set beam number'''
+        self._beam = value
+
+    @property
+    def filename(self):
+        '''Get FITS file name'''
+        return self._filename
+    @filename.setter
+    def filename(self, value):
+        '''Set FITS file name'''
+        self._filename= value
 
     @property
     def index(self):
@@ -75,15 +120,6 @@ class Chart:
     def coord(self, value):
         '''Set coord sequence'''
         self._coord = value
-
-    @property
-    def obj(self):
-        '''Get the name of object'''
-        return self._obj
-    @obj.setter
-    def obj(self, value):
-        '''Set coord sequence'''
-        self._obj = value
 
     @property
     def freq1ch(self):
@@ -115,19 +151,22 @@ class Chart:
     @property
     def freq(self):
         '''Get the 2D numpy array of freq'''
-        return np.array(
-                [np.arange(x) * self._chanbw + self._freq1ch for x in self._nchan])
+        chan = np.array([np.arange(x) for x in self.nchan])
+        chanbw = np.expand_dims(self.chanbw, axis=1)
+        freq1ch = np.expand_dims(self.freq1ch, axis=1)
+        return freq1ch + chan * chanbw
 
     @classmethod
-    def create(cls, obj=None, beam_num=1, fits_path=None, ky_path=None):
-        index_seq = []
-        freq1ch_seq = []
-        chanbw_seq = []
-        nchan_seq = []
-        coord_seq = []
-        time_seq = []
+    def create(cls, obj=None, beam=0, fits_path=None, ky_path=None):
+        filename_list = []
+        index_arr = np.array([])
+        freq1ch_arr = np.array([])
+        chanbw_arr = np.array([])
+        nchan_arr = np.array([])
+        coord_list = []
+        time_list = []
     
-        beam_str = '{:02d}'.format(beam_num)
+        beam_str = '{:02d}'.format(beam)
         fits_list = glob.glob(fits_path + '*M' + beam_str + '_N_*.fits')
         fits_list.sort()
 
@@ -136,49 +175,57 @@ class Chart:
 
         for fits_name in fits_list:
             nfits = fits.open(fits_name)
-            nchan =   list(nfits[1].data.field('NCHAN'))
-            nchan_seq += nchan
-            freq1ch = list(nfits[1].data.field('FREQ'))
-            freq1ch_seq += freq1ch
-            chanbw = list(nfits[1].data.field('CHAN_BW'))
-            chanbw_seq += chanbw
-            #freq = [list(x) for x in zip(freq1ch, chan_bw, nchan)]
-            #freq_seq += freq
-        
-            time = list(nfits[1].data.field('DATE-OBS'))
-            time_seq += time
-        
+
             nspec = nfits[1].header['NAXIS2']
-            index = [[fits_name, x+1] for x in range(nspec)]
-            index_seq += index
 
-        return cls(obj, index_seq, freq1ch_seq, chanbw_seq, 
-                nchan_seq, time_seq, coord_seq)
+            filename_list += [fits_name] * nspec
 
-    def save_json(self, json_name):
-        '''
-        save Chart to a .json file
-        '''
-        if json_name[-5:].lower() != '.json':
-            json_name += '.json'
+            index = np.arange(nspec, dtype='int') + 1
+            index_arr = np.concatenate((index_arr, index))
 
-        with open(json_name, 'w') as f:
-            json.dump(vars(self), f, cls=NpEncoder, sort_keys=True, indent=4)
-        return
+            freq1ch = nfits[1].data.field('FREQ')
+            freq1ch_arr = np.concatenate((freq1ch_arr, freq1ch))
 
-    @classmethod
-    def load_json(cls, json_name):
-        '''
-        load Chart from a .json file
-        '''
-        if json_name[-5:].lower() != '.json':
-            json_name += '.json'
+            chanbw = nfits[1].data.field('CHAN_BW')
+            chanbw_arr = np.concatenate((chanbw_arr, chanbw))
 
-        with open(json_name, 'r') as f:
-            chart_dict = json.load(f)
-        return cls(chart_dict['_obj'], chart_dict['_index'], chart_dict['_freq1ch'],
-                chart_dict['_chanbw'], chart_dict['_nchan'], chart_dict['_time'],
-                chart_dict['_coord'])
+            nchan = nfits[1].data.field('NCHAN')
+            nchan_arr = np.concatenate((nchan_arr, nchan))
+
+            time = list(nfits[1].data.field('DATE-OBS'))
+            time_list += time
+        
+        freq1ch_arr = freq1ch_arr * u.MHz
+        chanbw_arr = chanbw_arr * u.MHz
+        time_list = Time(time_list, format='isot', scale='utc')
+
+        return cls(obj, beam, filename_list, index_arr, freq1ch_arr, chanbw_arr, 
+                nchan_arr, time_list)
+
+    #def save_json(self, json_name):
+    #    '''
+    #    save Chart to a .json file
+    #    '''
+    #    if json_name[-5:].lower() != '.json':
+    #        json_name += '.json'
+
+    #    with open(json_name, 'w') as f:
+    #        json.dump(vars(self), f, cls=NpEncoder, sort_keys=True, indent=4)
+    #    return
+
+    #@classmethod
+    #def load_json(cls, json_name):
+    #    '''
+    #    load Chart from a .json file
+    #    '''
+    #    if json_name[-5:].lower() != '.json':
+    #        json_name += '.json'
+
+    #    with open(json_name, 'r') as f:
+    #        chart_dict = json.load(f)
+    #    return cls(chart_dict['_obj'], chart_dict['_index'], chart_dict['_freq1ch'],
+    #            chart_dict['_chanbw'], chart_dict['_nchan'], chart_dict['_time'],
+    #            chart_dict['_coord'])
 
 
 class NpEncoder(json.JSONEncoder):
