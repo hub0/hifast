@@ -1,6 +1,6 @@
 import glob
 import os
-import json
+import pickle
 
 import numpy as np
 
@@ -202,37 +202,21 @@ class Chart:
         return cls(obj, beam, filename_list, index_arr, freq1ch_arr, chanbw_arr, 
                 nchan_arr, time_list)
 
-    #def save_json(self, json_name):
-    #    '''
-    #    save Chart to a .json file
-    #    '''
-    #    if json_name[-5:].lower() != '.json':
-    #        json_name += '.json'
+    def save(self, pkl_name):
+        '''
+        save Chart to a binary file
+        '''
+        if pkl_name[-6:].lower() != '.chart':
+            pkl_name += '.chart'
 
-    #    with open(json_name, 'w') as f:
-    #        json.dump(vars(self), f, cls=NpEncoder, sort_keys=True, indent=4)
-    #    return
+        with open(pkl_name, 'wb') as f:
+            pickle.dump(self, f)
+        return
 
-    #@classmethod
-    #def load_json(cls, json_name):
-    #    '''
-    #    load Chart from a .json file
-    #    '''
-    #    if json_name[-5:].lower() != '.json':
-    #        json_name += '.json'
-
-    #    with open(json_name, 'r') as f:
-    #        chart_dict = json.load(f)
-    #    return cls(chart_dict['_obj'], chart_dict['_index'], chart_dict['_freq1ch'],
-    #            chart_dict['_chanbw'], chart_dict['_nchan'], chart_dict['_time'],
-    #            chart_dict['_coord'])
-
-
-class NpEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.int64):
-            return int(obj)
-        elif isinstance(obj, np.float64):
-            return float(obj)
-        else:
-            return super(NpEncoder, self).default(obj)
+    @classmethod
+    def load(cls, pkl_name):
+        '''
+        Load Chart from a pickle file
+        '''
+        f = open(pkl_name, 'rb')
+        return pickle.load(f)
