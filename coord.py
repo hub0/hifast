@@ -9,7 +9,7 @@ import astropy.units as u
 from .chart import Chart
 from .fast import FAST
 
-def load_ky(ky_file):
+def load_ky(ky_file, start_time=None, end_time=None):
     '''
     Load KY .xlsx file
 
@@ -17,6 +17,12 @@ def load_ky(ky_file):
     ----------
     ky_file : str
         The file name of KY file
+
+    start_time : astropy.time.Time
+        start time of the observation, for truncating the ky records
+
+    end_time : astropy.time.Time
+        end time of the observation, for truncating the ky records
 
     Returns
     -------
@@ -33,6 +39,17 @@ def load_ky(ky_file):
             format='iso', scale='utc') 
     time = time - TimeDelta(60*60*8, format='sec') # convert from GMT+8 to GMT
     xyz = ky_arr[['SwtDPos_X', 'SwtDPos_Y', 'SwtDPos_Z']].to_numpy()
+    
+    # truncate time and xyz by start_time and end_time
+    if start_time != None:
+        start_dt = time - start_time
+        time = time[start_dt > 0]
+        xyz = xyz[start_dt > 0]
+    if end_time != None:
+        end_dt = end_time - time
+        time = time[end_dt > 0]
+        xyz = xyz[end_dt > 0]
+
     return time, xyz
     
 def xyz_to_AltAz(time, xyz):
