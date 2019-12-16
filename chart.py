@@ -7,6 +7,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.time import Time
 import astropy.units as u
+from .coord import * 
 
 class Chart:
     '''
@@ -157,14 +158,14 @@ class Chart:
         return freq1ch + chan * chanbw
 
     @classmethod
-    def create(cls, obj=None, beam=0, fits_path=None, ky_path=None):
+    def create(cls, obj=None, beam=0, fits_path=None, ky_file=None):
         filename_list = []
         index_arr = np.array([])
         freq1ch_arr = np.array([])
         chanbw_arr = np.array([])
         nchan_arr = np.array([])
         coord_list = []
-        time_list = []
+        obs_time_list = []
     
         beam_str = '{:02d}'.format(beam)
         fits_list = glob.glob(fits_path + '*M' + beam_str + '_N_*.fits')
@@ -193,14 +194,35 @@ class Chart:
             nchan_arr = np.concatenate((nchan_arr, nchan))
 
             time = list(nfits[1].data.field('DATE-OBS'))
-            time_list += time
+            obs_time_list += time
         
         freq1ch_arr = freq1ch_arr * u.MHz
         chanbw_arr = chanbw_arr * u.MHz
-        time_list = Time(time_list, format='isot', scale='utc')
+        obs_time_arr = Time(obs_time_list, format='isot', scale='utc')
 
-        return cls(obj, beam, filename_list, index_arr, freq1ch_arr, chanbw_arr, 
-                nchan_arr, time_list)
+        #
+        # calculate obs_coord from obs_time and ky_xyz
+        #
+        if ky_file:
+            ky_time, ky_xyz = load_ky(ky_file)
+            obs_xyz_list = []
+            for obs_time in obs_time_arr:
+                obs_dt = ky_time - obs_time
+                obs_dt0 = obs_dt[obs_dt<0][-1].sec
+                obs_dt1 = obs_dt[obs_dt>0][0].sec
+                ky_xyz0 = ky_xyz[obs_dt<0][-1]
+                ky_xyz1 = ky_xyz[obs_dt>0][0]
+                weight0 = abs(obs_dt0)/(abs(obs_dt0)+abs(obs_dt1))
+                weight1 = abs(obs_dt1)/(abs(obs_dt0)+abs(obs_dt1))
+                obs_xyz_list.append(ky_xyz0*weight0 + ky_xyz1*weight1)
+            obs_xyz_arr = np.array(obs_xyz_list)
+            obs_coord = xyz_to_icrs(obs_time_arr, obs_xyz_arr)
+
+        else:
+            obs_coord = None
+
+        return cls(obj, beam, filename_list, index_arr, freq1ch_arr, 
+                chanbw_arr, nchan_arr, obs_time_arr, obs_coord)
 
     def save(self, pkl_name):
         '''

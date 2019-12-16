@@ -2,11 +2,10 @@ import pandas as pd
 import numpy as np
 import xlrd
 
-from astropy.coordinates import SkyCoord, AltAz
+from astropy.coordinates import SkyCoord, AltAz, ICRS
 from astropy.time import Time, TimeDelta
 import astropy.units as u
 
-from .chart import Chart
 from .fast import FAST
 
 def load_ky(ky_file, start_time=None, end_time=None):
@@ -86,3 +85,31 @@ def xyz_to_AltAz(time, xyz):
     return AltAz(az=az*u.rad, alt=alt*u.rad, obstime=time, location=FAST.loc())
     
     
+def xyz_to_icrs(time, xyz):
+    '''
+    Convert XYZ position of the phase centre of the receiver to 
+    the projected ICRS coordinates of the 1st beam.
+
+    Definition of XYZ (???)
+    origin: the focus
+    X: geographic east
+    Y: geographic north
+    Z: zenith
+
+    Parameters
+    ----------
+    time : astropy.time.Time
+        Time stamps of xyz records
+
+    xyz : numpy.ndarray
+        the 3D position with shape (, 3) of the receiver relative to the 
+        focus of the telescope.
+
+    Returns
+    -------
+    icrs : astropy.coordinates.SkyCoord
+        The projected ICRS coordinates of the 1st beam
+    '''
+    altaz = xyz_to_AltAz(time, xyz)
+    
+    return altaz.transform_to(ICRS)
