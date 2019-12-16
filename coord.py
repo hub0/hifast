@@ -80,7 +80,7 @@ def xyz_to_AltAz(time, xyz):
     y = xyz[:, 1]
     z = xyz[:, 2]
 
-    az = np.pi - np.arctan2(x, y) # from receiver position to pointing az
+    az = np.pi * 1.5 - np.arctan2(y, x) # from receiver position to pointing az
     alt = np.arctan((z**2/(x**2+y**2))**0.5)
 
     return AltAz(az=az*u.rad, alt=alt*u.rad, obstime=time, location=FAST.loc())
