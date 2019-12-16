@@ -56,10 +56,11 @@ def xyz_to_AltAz(time, xyz):
     Convert XYZ position of the phase centre of the receiver to 
     (Azimuth, Elevation) pointing of the 1st beam.
 
-    Definition of XYZ (???)
-    X: from the focus to geographic north
-    Z: from the focus to the Zenith
-    Y: derived from X and Z in a right-hand-system
+    Definition of XYZ
+    origin: the focus
+    X: geographic east
+    Y: geographic north
+    Z: zenith
 
     Parameters
     ----------
@@ -90,7 +91,7 @@ def xyz_to_icrs(time, xyz):
     Convert XYZ position of the phase centre of the receiver to 
     the projected ICRS coordinates of the 1st beam.
 
-    Definition of XYZ (???)
+    Definition of XYZ
     origin: the focus
     X: geographic east
     Y: geographic north
