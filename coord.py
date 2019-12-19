@@ -80,13 +80,13 @@ def xyz_to_AltAz(time, xyz):
     y = xyz[:, 1]
     z = xyz[:, 2]
 
-    az = np.pi * 1.5 - np.arctan2(y, x) # from receiver position to pointing az
-    alt = np.arctan((z**2/(x**2+y**2))**0.5)
+    az = (np.pi * 1.5 - np.arctan2(y, x)) * u.rad 
+    alt = (np.arctan((z**2/(x**2+y**2))**0.5)) * u.rad
 
-    return AltAz(az=az*u.rad, alt=alt*u.rad, obstime=time, location=FAST.loc())
+    return AltAz(az=az, alt=alt, obstime=time, location=FAST.loc())
     
     
-def xyz_to_icrs(time, xyz):
+def xyz_to_radec(time, xyz):
     '''
     Convert XYZ position of the phase centre of the receiver to 
     the projected ICRS coordinates of the 1st beam.
@@ -108,9 +108,14 @@ def xyz_to_icrs(time, xyz):
 
     Returns
     -------
-    icrs : astropy.coordinates.SkyCoord
-        The projected ICRS coordinates of the 1st beam
+    ra : float
+        The ICRS R.A. of the phase center in deg
+
+    dec : float
+        The ICRS Dec of the phase center in deg
     '''
     altaz = xyz_to_AltAz(time, xyz)
     
-    return altaz.transform_to(ICRS)
+    icrs = altaz.transform_to(ICRS)
+
+    return icrs.ra, icrs.dec

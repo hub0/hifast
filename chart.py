@@ -158,7 +158,34 @@ class Chart:
         return freq1ch + chan * chanbw
 
     @classmethod
-    def create(cls, obj=None, beam=0, fits_path=None, ky_file=None):
+    def create(cls, obj=None, beam=1, rot=0, fits_path=None, ky_file=None):
+        '''
+        Create a Chart instance from FITS and KY files
+
+        Parameters
+        ----------
+        obj : str
+            Name of the object.
+
+        beam : int
+            Beam number.
+
+        rot : float
+            Rotation angle in rad.
+        
+        fits_path : str
+            Path of FITS files. FITS in under this path should have 
+            names like CygXN_OTF-M01_N_0001.fits.
+
+        ky_file : str
+            File name of the KY file. This KY file should cover the
+            time span of the whole observation.
+
+        Returns
+        -------
+        chart : Chart
+            A Chart instance
+        '''
         filename_list = []
         index_arr = np.array([])
         freq1ch_arr = np.array([])
@@ -200,7 +227,6 @@ class Chart:
         chanbw_arr = chanbw_arr * u.MHz
         obs_time_arr = Time(obs_time_list, format='isot', scale='utc')
 
-        #
         # calculate obs_coord from obs_time and ky_xyz
         #
         if ky_file:
@@ -216,8 +242,13 @@ class Chart:
                 weight1 = abs(obs_dt1)/(abs(obs_dt0)+abs(obs_dt1))
                 obs_xyz_list.append(ky_xyz0*weight0 + ky_xyz1*weight1)
             obs_xyz_arr = np.array(obs_xyz_list)
-            obs_coord = xyz_to_icrs(obs_time_arr, obs_xyz_arr)
-
+            c_ra, c_dec = xyz_to_radec(obs_time_arr, obs_xyz_arr)
+            # cal offset for beam and rotation
+            off_ra, off_dec = FAST.beam_offset(beam, rot)
+            obs_dec = c_dec + off_dec
+            obs_ra = c_ra + off_ra / np.cos(obs_dec.rad)
+            obs_coord = SkyCoord(ra=obs_ra, dec=obs_dec, 
+                    frame='icrs', obstime=obs_time_arr)
         else:
             obs_coord = None
 
