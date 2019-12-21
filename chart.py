@@ -282,3 +282,6 @@ class Chart:
                 self.freq1ch[idx], self.chanbw[idx], self.nchan[idx],
                 self.time[idx], self.coord[idx])
         return sliced
+
+    def __len__(self):
+        return len(self.filename)
