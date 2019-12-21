@@ -35,7 +35,7 @@ class Chart:
         Beam number. 1~19 for certain beam of the 19 beam receiver,
         0 for a beam-fusion chart.
 
-    filename : list
+    filename : numpy.ndarray 
         File name of the FITS which the spectrum is stored.
 
     index : numpy.ndarray
@@ -186,7 +186,7 @@ class Chart:
         chart : Chart
             A Chart instance
         '''
-        filename_list = []
+        filename_arr = np.empty(0, dtype='unicode')
         index_arr = np.array([])
         freq1ch_arr = np.array([])
         chanbw_arr = np.array([])
@@ -206,7 +206,9 @@ class Chart:
 
             nspec = nfits[1].header['NAXIS2']
 
-            filename_list += [fits_name] * nspec
+            farr = np.empty(nspec, dtype=f'<U{len(fits_name)}')
+            farr[:] = fits_name   
+            filename_arr = np.append(filename_arr, farr) 
 
             index = np.arange(nspec, dtype='int') + 1
             index_arr = np.concatenate((index_arr, index))
@@ -252,7 +254,7 @@ class Chart:
         else:
             obs_coord = None
 
-        return cls(obj, beam, filename_list, index_arr, freq1ch_arr, 
+        return cls(obj, beam, filename_arr, index_arr, freq1ch_arr, 
                 chanbw_arr, nchan_arr, obs_time_arr, obs_coord)
 
     def save(self, pkl_name):
@@ -273,3 +275,10 @@ class Chart:
         '''
         f = open(pkl_name, 'rb')
         return pickle.load(f)
+
+    def __getitem__(self, idx):
+        sliced = Chart(self.obj, self.beam, 
+                self.filename[idx], self.index[idx],
+                self.freq1ch[idx], self.chanbw[idx], self.nchan[idx],
+                self.time[idx], self.coord[idx])
+        return sliced
