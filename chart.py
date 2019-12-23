@@ -61,18 +61,21 @@ class Chart:
         Sky coordinates for each spectra
     '''
 
-    def __init__(self, obj, beam, filename, index, freq1ch, chanbw, nchan, npol,
-            time, coord=None):
+    def __init__(self, obj, beam, 
+            filename=None, index=None, 
+            freq1ch, chanbw, nchan, npol,
+            time, coord=None, data=None):
         self._obj = obj
         self._beam = beam
         self._filename = filename
-        self._index = index.astype('int32')
-        self._freq1ch = freq1ch.astype('float64')
-        self._chanbw = chanbw.astype('int32')
-        self._nchan = nchan.astype('int32')
-        self._npol = npol.astype('int32')
+        self._index = index.astype('int')
+        self._freq1ch = freq1ch.astype('float')
+        self._chanbw = chanbw.astype('float')
+        self._nchan = nchan.astype('int')
+        self._npol = npol.astype('int')
         self._time = time 
         self._coord = coord 
+        self._data = data.astype('float') 
 
     @property
     def obj(self):
@@ -127,6 +130,15 @@ class Chart:
     def coord(self, value):
         '''Set coord sequence'''
         self._coord = value
+
+    @property
+    def data(self):
+        '''Get the data'''
+        return self._data
+    @data.setter
+    def data(self, value):
+        '''Set data'''
+        self._data = value
 
     @property
     def freq1ch(self):
@@ -209,6 +221,7 @@ class Chart:
         npol_arr = np.array([])
         coord_list = []
         obs_time_list = []
+        data = []
     
         beam_str = '{:02d}'.format(beam)
         fits_list = glob.glob(fits_path + '*M' + beam_str + '_N_*.fits')
@@ -243,10 +256,14 @@ class Chart:
 
             time = list(nfits[1].data.field('DATE-OBS'))
             obs_time_list += time
+
+            for spec in nfits[1].data.field('DATA'):
+                data.append(spec)
         
         freq1ch_arr = freq1ch_arr * u.MHz
         chanbw_arr = chanbw_arr * u.MHz
         obs_time_arr = Time(obs_time_list, format='isot', scale='utc')
+        data = np.array(data)
 
         # calculate obs_coord from obs_time and ky_xyz
         #
@@ -273,8 +290,12 @@ class Chart:
         else:
             obs_coord = None
 
-        return cls(obj, beam, filename_arr, index_arr, freq1ch_arr, 
-                chanbw_arr, nchan_arr, npol_arr, obs_time_arr, obs_coord)
+        return cls(obj, beam, 
+                filename_arr, index_arr, 
+                freq1ch_arr, chanbw_arr, nchan_arr, 
+                npol_arr, 
+                obs_time_arr, obs_coord,
+                data)
 
     def save(self, pkl_name):
         '''
@@ -299,19 +320,55 @@ class Chart:
         sliced = Chart(self.obj, self.beam, 
                 self.filename[idx], self.index[idx],
                 self.freq1ch[idx], self.chanbw[idx], self.nchan[idx],
-                self.time[idx], self.coord[idx])
+                self.npol[idx], self.time[idx], self.coord[idx])
         return sliced
 
     def __len__(self):
         return len(self.filename)
 
-    def rawdata(self):
+    def checkout_rawdata(self):
         raw = np.empty((0, self.nchan[0], self.npol[0]))
         for (fn, ind) in zip(self.filename, self.index):
             hdu_list = fits.open(fn)
             data = hdu_list[1].data.field('DATA')[ind]
             data = np.expand_dims(data, axis=0)
             raw = np.append(raw, data, axis=0)
-        return raw
+        self.data = raw
+        return 
 
-    #def aver(self, 
+    def freq_trim(self, freq_range):
+        # todo: upgrade to freq_regrid method with freq_range, chan_bw,
+        # regrid mode
+        freq_lower = freq_range[0]
+        freq_upper = freq_range[1]
+        
+        trmd_data = []
+        trmd_freq1ch = []
+        trmd_nchan = []
+        for (freq1ch, nchan, chanbw, spec) in zip(self.freq1ch, 
+                self.nchan, self.chanbw, self.data):
+            origin_freq = np.arange(nchan)*chanbw + freq1ch
+            mask = (origin_freq > freq_lower) & (origin_freq < freq_upper)
+            trmd_freq = origin_freq[mask]
+            trmd_freq1ch.append(trmd_freq[0].to(u.MHz).value)
+            trmd_nchan.append(len(trmd_freq))
+            trmd_data.append(spec[mask])
+        trmd_data = np.array(trmd_data)
+        trmd_freq1ch = np.array(trmd_freq1ch)
+        trmd_nchan = np.array(trmd_nchan)
+        return Chart(self.obj, self.beam, self.filename, self.index,
+                trmd_freq1ch, self.chanbw, trmd_nchan, self.npol, 
+                self.time, self.coord, trmd_data)
+
+    #def stokes_I(self):
+    #    '''
+    #    convert data from pols to stokes I
+    #    '''
+    def pols_trim(self):
+        trmd = self
+        trmd.data = trmd.data[:,:,:2]
+        return trmd
+       
+            
+
+            
