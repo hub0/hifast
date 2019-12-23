@@ -19,7 +19,8 @@ class Chart:
 
     A Chart contains following meta-data for an observation.
         obj : name of the object
-        index : FITS file name and the sequence number in the FITS
+        filename : FITS file name
+        index : the sequence number in the FITS of spec
         freq1ch : central frequency of the 1st channel of each spectrum
         chanbw : width of 1 channel
         nchan : number of channels
@@ -39,7 +40,7 @@ class Chart:
         File name of the FITS which the spectrum is stored.
 
     index : numpy.ndarray
-        The Index number of the spectrum in its FITS. 
+        The Index number of the spectrum in its FITS.
 
     freq1ch : astropy.units.Quantity (in frequency unit)
         Central frequency of the 1st channel of each spectrum
@@ -49,6 +50,9 @@ class Chart:
 
     nchan : numpy.ndarray
         Number of channels
+
+    npol : numpy.ndarray
+        Number of polarizations
     
     time : astropy.time.Time
         Time stamp of each spectrum
@@ -57,14 +61,16 @@ class Chart:
         Sky coordinates for each spectra
     '''
 
-    def __init__(self, obj, beam, filename, index, freq1ch, chanbw, nchan, time, coord=None):
+    def __init__(self, obj, beam, filename, index, freq1ch, chanbw, nchan, npol,
+            time, coord=None):
         self._obj = obj
         self._beam = beam
         self._filename = filename
-        self._index = index
-        self._freq1ch = freq1ch
-        self._chanbw = chanbw
-        self._nchan = nchan 
+        self._index = index.astype('int32')
+        self._freq1ch = freq1ch.astype('float64')
+        self._chanbw = chanbw.astype('int32')
+        self._nchan = nchan.astype('int32')
+        self._npol = npol.astype('int32')
         self._time = time 
         self._coord = coord 
 
@@ -150,6 +156,15 @@ class Chart:
         self._nchan = value 
 
     @property
+    def npol(self):
+        '''Get the list of pols number'''
+        return self._npol
+    @npol.setter
+    def npol(self, value):
+        '''Set npol'''
+        self._npol = value
+
+    @property
     def freq(self):
         '''Get the 2D numpy array of freq'''
         chan = np.array([np.arange(x) for x in self.nchan])
@@ -191,6 +206,7 @@ class Chart:
         freq1ch_arr = np.array([])
         chanbw_arr = np.array([])
         nchan_arr = np.array([])
+        npol_arr = np.array([])
         coord_list = []
         obs_time_list = []
     
@@ -210,7 +226,7 @@ class Chart:
             farr[:] = fits_name   
             filename_arr = np.append(filename_arr, farr) 
 
-            index = np.arange(nspec, dtype='int') + 1
+            index = np.arange(nspec, dtype='int')
             index_arr = np.concatenate((index_arr, index))
 
             freq1ch = nfits[1].data.field('FREQ')
@@ -221,6 +237,9 @@ class Chart:
 
             nchan = nfits[1].data.field('NCHAN')
             nchan_arr = np.concatenate((nchan_arr, nchan))
+
+            npol = np.ones(nspec) * nfits[1].data.field('DATA').shape[-1]
+            npol_arr = np.concatenate((npol_arr, npol))
 
             time = list(nfits[1].data.field('DATE-OBS'))
             obs_time_list += time
@@ -255,7 +274,7 @@ class Chart:
             obs_coord = None
 
         return cls(obj, beam, filename_arr, index_arr, freq1ch_arr, 
-                chanbw_arr, nchan_arr, obs_time_arr, obs_coord)
+                chanbw_arr, nchan_arr, npol_arr, obs_time_arr, obs_coord)
 
     def save(self, pkl_name):
         '''
@@ -285,3 +304,14 @@ class Chart:
 
     def __len__(self):
         return len(self.filename)
+
+    def rawdata(self):
+        raw = np.empty((0, self.nchan[0], self.npol[0]))
+        for (fn, ind) in zip(self.filename, self.index):
+            hdu_list = fits.open(fn)
+            data = hdu_list[1].data.field('DATA')[ind]
+            data = np.expand_dims(data, axis=0)
+            raw = np.append(raw, data, axis=0)
+        return raw
+
+    #def aver(self, 
