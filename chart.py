@@ -63,19 +63,19 @@ class Chart:
 
     def __init__(self, obj, beam, 
             filename=None, index=None, 
-            freq1ch, chanbw, nchan, npol,
-            time, coord=None, data=None):
+            freq1ch=None, chanbw=None, nchan=None, npol=None,
+            time=None, coord=None, data=None):
         self._obj = obj
         self._beam = beam
         self._filename = filename
-        self._index = index.astype('int')
-        self._freq1ch = freq1ch.astype('float')
-        self._chanbw = chanbw.astype('float')
-        self._nchan = nchan.astype('int')
-        self._npol = npol.astype('int')
+        self._index = index
+        self._freq1ch = freq1ch
+        self._chanbw = chanbw
+        self._nchan = nchan
+        self._npol = npol
         self._time = time 
         self._coord = coord 
-        self._data = data.astype('float') 
+        self._data = data
 
     @property
     def obj(self):
@@ -185,7 +185,7 @@ class Chart:
         return freq1ch + chan * chanbw
 
     @classmethod
-    def create(cls, obj=None, beam=1, rot=0, fits_path=None, ky_file=None):
+    def create(cls, obj=None, beam=1, rot=0, fits_name=None, ky_file=None):
         '''
         Create a Chart instance from FITS and KY files
 
@@ -200,9 +200,8 @@ class Chart:
         rot : float
             Rotation angle in rad.
         
-        fits_path : str
-            Path of FITS files. FITS in under this path should have 
-            names like CygXN_OTF-M01_N_0001.fits.
+        fits_name : str
+            Name of FITS file.
 
         ky_file : str
             File name of the KY file. This KY file should cover the
@@ -213,64 +212,31 @@ class Chart:
         chart : Chart
             A Chart instance
         '''
-        filename_arr = np.empty(0, dtype='unicode')
-        index_arr = np.array([])
-        freq1ch_arr = np.array([])
-        chanbw_arr = np.array([])
-        nchan_arr = np.array([])
-        npol_arr = np.array([])
-        coord_list = []
-        obs_time_list = []
-        data = []
-    
-        beam_str = '{:02d}'.format(beam)
-        fits_list = glob.glob(fits_path + '*M' + beam_str + '_N_*.fits')
-        fits_list.sort()
+        with fits.open(fits_name) as hdu_list:
 
-        if len(fits_list) == 0:
-            raise ValueError('FITS path contains no matching files')
+            nspec = hdu_list[1].header['NAXIS2']
 
-        for fits_name in fits_list:
-            nfits = fits.open(fits_name)
+            filename_arr = np.empty(nspec, dtype=f'<U{len(fits_name)}')
+            filename_arr[:] = fits_name   
 
-            nspec = nfits[1].header['NAXIS2']
+            index_arr = np.arange(nspec, dtype='int')
+            freq1ch_arr = hdu_list[1].data.field('FREQ') * u.MHz
+            chanbw_arr = hdu_list[1].data.field('CHAN_BW') * u.MHz
+            nchan_arr = hdu_list[1].data.field('NCHAN').astype('int')
+            npol_arr = (np.ones(nspec) * 
+                    hdu_list[1].data.field('DATA').shape[-1]).astype('int')
 
-            farr = np.empty(nspec, dtype=f'<U{len(fits_name)}')
-            farr[:] = fits_name   
-            filename_arr = np.append(filename_arr, farr) 
+            time = hdu_list[1].data.field('DATE-OBS')
+            time_arr = Time(time, format='isot', scale='utc')
 
-            index = np.arange(nspec, dtype='int')
-            index_arr = np.concatenate((index_arr, index))
-
-            freq1ch = nfits[1].data.field('FREQ')
-            freq1ch_arr = np.concatenate((freq1ch_arr, freq1ch))
-
-            chanbw = nfits[1].data.field('CHAN_BW')
-            chanbw_arr = np.concatenate((chanbw_arr, chanbw))
-
-            nchan = nfits[1].data.field('NCHAN')
-            nchan_arr = np.concatenate((nchan_arr, nchan))
-
-            npol = np.ones(nspec) * nfits[1].data.field('DATA').shape[-1]
-            npol_arr = np.concatenate((npol_arr, npol))
-
-            time = list(nfits[1].data.field('DATE-OBS'))
-            obs_time_list += time
-
-            for spec in nfits[1].data.field('DATA'):
-                data.append(spec)
-        
-        freq1ch_arr = freq1ch_arr * u.MHz
-        chanbw_arr = chanbw_arr * u.MHz
-        obs_time_arr = Time(obs_time_list, format='isot', scale='utc')
-        data = np.array(data)
+            data = hdu_list[1].data.field('DATA')
 
         # calculate obs_coord from obs_time and ky_xyz
         #
         if ky_file:
             ky_time, ky_xyz = load_ky(ky_file)
             obs_xyz_list = []
-            for obs_time in obs_time_arr:
+            for obs_time in time_arr:
                 obs_dt = ky_time - obs_time
                 obs_dt0 = obs_dt[obs_dt<0][-1].sec
                 obs_dt1 = obs_dt[obs_dt>0][0].sec
@@ -280,13 +246,13 @@ class Chart:
                 weight1 = abs(obs_dt1)/(abs(obs_dt0)+abs(obs_dt1))
                 obs_xyz_list.append(ky_xyz0*weight0 + ky_xyz1*weight1)
             obs_xyz_arr = np.array(obs_xyz_list)
-            c_ra, c_dec = xyz_to_radec(obs_time_arr, obs_xyz_arr)
+            c_ra, c_dec = xyz_to_radec(time_arr, obs_xyz_arr)
             # cal offset for beam and rotation
             off_ra, off_dec = FAST.beam_offset(beam, rot)
             obs_dec = c_dec + off_dec
             obs_ra = c_ra + off_ra / np.cos(obs_dec.rad)
             obs_coord = SkyCoord(ra=obs_ra, dec=obs_dec, 
-                    frame='icrs', obstime=obs_time_arr)
+                    frame='icrs', obstime=time_arr)
         else:
             obs_coord = None
 
@@ -294,7 +260,7 @@ class Chart:
                 filename_arr, index_arr, 
                 freq1ch_arr, chanbw_arr, nchan_arr, 
                 npol_arr, 
-                obs_time_arr, obs_coord,
+                time_arr, obs_coord,
                 data)
 
     def save(self, pkl_name):
@@ -320,7 +286,8 @@ class Chart:
         sliced = Chart(self.obj, self.beam, 
                 self.filename[idx], self.index[idx],
                 self.freq1ch[idx], self.chanbw[idx], self.nchan[idx],
-                self.npol[idx], self.time[idx], self.coord[idx])
+                self.npol[idx], self.time[idx], self.coord[idx], 
+                self.data[idx])
         return sliced
 
     def __len__(self):
@@ -369,6 +336,10 @@ class Chart:
         trmd.data = trmd.data[:,:,:2]
         return trmd
        
+    #def aver(self, aver_num):
+    #    '''
+    #    average every aver_num spectra in Chart
+    #    '''
             
 
             

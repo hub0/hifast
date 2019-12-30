@@ -87,4 +87,26 @@ class FAST:
         off_dec = s * x + c * y 
         return off_ra, off_dec
 
+    @classmethod
+    def mainbeam_eff(cls, beam, za):
+        '''
+        Calculate main beam efficiency for zenith angle < 26.4 deg
+        
+        Parameters
+        ----------
+        beam : int
+            beam number
+
+        za : float or numpy.ndarray
+            zenith angle in degree
+
+        Returns
+        -------
+        mb_eff : float or numpy.ndarray
+            main beam efficiency with the same shape of za
+        '''
+        return
+        
+        
+        
 
