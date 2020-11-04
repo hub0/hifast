@@ -321,25 +321,30 @@ class Chart:
             trmd_nchan.append(len(trmd_freq))
             trmd_data.append(spec[mask])
         trmd_data = np.array(trmd_data)
-        trmd_freq1ch = np.array(trmd_freq1ch)
+        trmd_freq1ch = np.array(trmd_freq1ch) * u.MHz
         trmd_nchan = np.array(trmd_nchan)
         return Chart(self.obj, self.beam, self.filename, self.index,
                 trmd_freq1ch, self.chanbw, trmd_nchan, self.npol, 
                 self.time, self.coord, trmd_data)
 
-    #def stokes_I(self):
-    #    '''
-    #    convert data from pols to stokes I
-    #    '''
     def pols_trim(self):
         trmd = self
         trmd.data = trmd.data[:,:,:2]
+        trmd.npol = self.npol / 2
         return trmd
        
-    #def aver(self, aver_num):
-    #    '''
-    #    average every aver_num spectra in Chart
-    #    '''
-            
 
-            
+    def baseline_remove(self, emi_range, degree):
+        corrected_data = []
+        for specs, freq in zip(self.data, self.freq):
+            corrected_specs = []
+            for spec in specs.T:
+                mask = (freq < emi_range[0]) | (freq > emi_range[1])
+                params = np.polyfit(freq[mask].value, spec[mask], degree)
+                bl_model = np.poly1d(params) 
+                spec = spec - bl_model(freq.value)
+                corrected_specs.append(spec)
+            corrected_data.append(np.array(corrected_specs).T)
+        blremoved = self
+        blremoved.data = np.array(corrected_data)
+        return blremoved 

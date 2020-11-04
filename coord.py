@@ -15,21 +15,21 @@ def load_ky(ky_file, start_time=None, end_time=None):
     Parameters
     ----------
     ky_file : str
-        The file name of KY file
+        The file name of the receiver cabin position file
 
     start_time : astropy.time.Time
-        start time of the observation, for truncating the ky records
+        start time of the observation, to truncate the ky records
 
     end_time : astropy.time.Time
-        end time of the observation, for truncating the ky records
+        end time of the observation, to truncate the ky records
 
     Returns
     -------
     time : astropy.time.Time
-        time sequence of KY file
+        time sequence of the receiver cabin position records 
 
     xyz : numpy.ndarray
-        measured xyz position of receiver
+        measured xyz position of the receiver cabin
     '''
 
     ky_sheetname = pd.ExcelFile(ky_file).sheet_names[1]
@@ -74,7 +74,7 @@ def xyz_to_AltAz(time, xyz):
     Returns
     -------
     altaz : astropy.coordinates.AltAz
-        The pointing in AltAz of the 1st beam
+        The AltAz of the 1st beam
     '''
     x = xyz[:, 0]
     y = xyz[:, 1]
