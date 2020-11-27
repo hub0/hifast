@@ -327,7 +327,10 @@ class Chart:
                 trmd_freq1ch, self.chanbw, trmd_nchan, self.npol, 
                 self.time, self.coord, trmd_data)
 
-    def pols_trim(self):
+    def xyyx_trim(self):
+        """
+        Remove XY and YX polarization data
+        """
         trmd = self
         trmd.data = trmd.data[:,:,:2]
         trmd.npol = self.npol / 2
