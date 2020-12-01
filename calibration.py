@@ -151,7 +151,7 @@ def smooth(x,window_len=11,window='hanning'):
 
     y = np.convolve(w/w.sum(),s,mode='valid')
     y = y[int(window_len/2):-1*int(window_len/2)] # trim to the same size as x
-    y = y / mean(y) * mean(x)  # preserve the total value
+    y = y / np.mean(y) * np.mean(x)  # preserve the total value
     return y
 
 
