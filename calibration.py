@@ -1,5 +1,6 @@
 import numpy as np
 import astropy.units as u
+from astropy.units import UnitConversionError
 from .chart import Chart
 
 def get_tcal(tcal_fn, beam):
@@ -78,7 +79,7 @@ def get_tcal(tcal_fn, beam):
 
     freq1ch = np.array(freqs[0:1]) * u.MHz
 
-    nchan = np.array([len(freqs)])
+    nchan = len(freqs)
 
     freqs0 = freqs[:-1]
     freqs1 = freqs[1:]
@@ -129,8 +130,8 @@ def smooth(x,window_len=11,window='hanning'):
     if x.ndim != 1:
         raise ValueError("smooth only accepts 1 dimension arrays.")
 
-    if x.size < window_len:
-        raise ValueError("Input vector needs to be bigger than window size.")
+    if len(x) < window_len:
+        raise ValueError("Input array needs to lager than window size on the given axis.")
 
 
     if window_len<3:
@@ -138,20 +139,73 @@ def smooth(x,window_len=11,window='hanning'):
 
 
     if not window in ['flat', 'hanning', 'hamming', 'bartlett', 'blackman']:
-        raise ValueError("Window is on of 'flat', 'hanning', 'hamming', "
+        raise ValueError("Window must be one of 'flat', 'hanning', 'hamming', "
                 "'bartlett', 'blackman'")
 
 
     s = np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
-    #print(len(s))
+
+    ###  1. transpose the ndarray to move the given axis to the last dimension;
+    ###  2. Create left and right reflective boundaries on the last dimentsion
+    ###     using ellipsis;
+    ###  3. concatenate boundaries with the ndarray
+    ###  4. convolve on the last dimension
+    ###  5. trim the convolved ndarray on the last dimension
+    ###  6. transpose the convolved ndarray to move the last dimension to the 
+    ###     axis-th dimension
+
+    ##axes = [n for n in range(x.ndim)]
+    ##axes.append(axes.pop(axis))
+    ##s = np.transpose(x, axes=axes)
+    ##
+    ##lb = s[..., window_len-1:0:-1]
+    ##rb = s[..., -2:-window_len-1:-1]
+    ##
+    ##s = np.concatenate((lb, s, rb), axis=-1)
+
     if window == 'flat': #moving average
         w = np.ones(window_len,'d')
     else:
         w = eval('np.'+window+'(window_len)')
 
     y = np.convolve(w/w.sum(),s,mode='valid')
+    
     y = y[int(window_len/2):-1*int(window_len/2)] # trim to the same size as x
     y = y / np.mean(y) * np.mean(x)  # preserve the total value
     return y
 
+def freq_smooth(c, freq_win, window='hanning'):
+    """
+    Smooth the data in Chart in frequency regime with given frequency widow.
 
+    Parameters
+    ----------
+    c: hifast.Chart 
+        The chart to be smoothed
+    freq_win : astropy.units.quantity.Quantity
+        The width of smooth window in frequency unit
+    window : str
+        The type of smooth window
+
+    Returns
+    -------
+    smoothed_chart : hifast.Chart
+    """
+
+    try:
+        freq_win.to(u.Hz)
+    except UnitConversionError:
+        raise UnitConversionError(
+                'freq_win must be with a frequency equivalent unit'
+                )
+
+    chan_win = int(freq_win / (c.freq[1] - c.freq[0]))
+    
+    
+
+    for i in range(c.data.shape[0]):
+        for j in range(c.data.shape[2]):
+            spec = smooth(c.data[i, :, j], window_len=chan_win, window=window)
+            c.data[i, :, j] = spec
+
+    return c

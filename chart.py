@@ -178,11 +178,11 @@ class Chart:
 
     @property
     def freq(self):
-        '''Get the 2D numpy array of freq'''
-        chan = np.array([np.arange(x) for x in self.nchan])
-        chanbw = np.expand_dims(self.chanbw, axis=1)
-        freq1ch = np.expand_dims(self.freq1ch, axis=1)
-        return freq1ch + chan * chanbw
+        '''Get the 1D numpy array of freq'''
+        #chan = np.array([np.arange(x) for x in self.nchan])
+        #chanbw = np.expand_dims(self.chanbw, axis=1)
+        #freq1ch = np.expand_dims(self.freq1ch, axis=1)
+        return self.freq1ch + np.arange(self.nchan) * self.chanbw
 
     @classmethod
     def create(cls, obj=None, beam=1, rot=0, fits_name=None, ky_file=None):
